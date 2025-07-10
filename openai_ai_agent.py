@@ -34,32 +34,32 @@ class OpenAI_SparePartsAgent:
         
         try:
             # Load rolling stock (equipment)
-            with open('rollingstock.json', 'r') as f:
+            with open('json/rollingstock.json', 'r') as f:
                 data['equipment'] = json.load(f)
             
             # Load spare parts
-            with open('spareparts.json', 'r') as f:
+            with open('json/spareparts.json', 'r') as f:
                 data['spare_parts'] = json.load(f)
             
             # Load activities
-            with open('activities.json', 'r') as f:
+            with open('json/activities.json', 'r') as f:
                 data['activities'] = json.load(f)
             
             # Load other data files if they exist
             try:
-                with open('contracts.json', 'r') as f:
+                with open('json/contracts.json', 'r') as f:
                     data['contracts'] = json.load(f)
             except:
                 data['contracts'] = []
             
             try:
-                with open('movements.json', 'r') as f:
+                with open('json/movements.json', 'r') as f:
                     data['movements'] = json.load(f)
             except:
                 data['movements'] = []
             
             try:
-                with open('jobordertask.json', 'r') as f:
+                with open('json/joborders.json', 'r') as f:
                     data['job_orders'] = json.load(f)
             except:
                 data['job_orders'] = []
