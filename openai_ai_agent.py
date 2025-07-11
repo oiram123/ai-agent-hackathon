@@ -4,6 +4,8 @@ import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import logging
+from dotenv import load_dotenv
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -84,9 +86,9 @@ class OpenAI_SparePartsAgent:
         total_cost = sum(part.get('UNITPRICE', 0) * part.get('QUANTITY', 1) for part in self.data['spare_parts'])
         
         # Sample some data for analysis (limit to avoid token limits)
-        sample_equipment = self.data['equipment'][:10]  # First 10 equipment
-        sample_parts = self.data['spare_parts'][:20]   # First 20 parts
-        sample_activities = self.data['activities'][:15]  # First 15 activities
+        sample_equipment = self.data['equipment'][:2]  # First 10 equipment
+        sample_parts = self.data['spare_parts'][:3]   # First 20 parts
+        sample_activities = self.data['activities'][:3]  # First 15 activities
         
         prompt = f"""
 You are an expert AI maintenance analyst specializing in spare parts management and equipment health.
@@ -136,7 +138,7 @@ Respond in a clear, professional manner suitable for a maintenance manager.
                     {"role": "system", "content": "You are an expert maintenance AI analyst with deep knowledge of spare parts management, equipment health monitoring, and predictive maintenance. Provide detailed, actionable insights based on the data provided."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
+                temperature=0.0,
                 max_tokens=1000
             )
             
