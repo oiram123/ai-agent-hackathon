@@ -34,5 +34,10 @@ def get_due_checks():
     due_checks = agent.get_due_part_checks()
     return jsonify(due_checks)
 
+@app.route('/api/machine-analysis/<machine_id>', methods=['GET'])
+def get_machine_analysis(machine_id):
+    analysis = agent.get_machine_analysis(machine_id)
+    return jsonify(analysis)
+
 if __name__ == '__main__':
     app.run(debug=True) 

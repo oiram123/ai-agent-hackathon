@@ -426,6 +426,62 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
         
         return self.ask_ai_structured(query, response_format)
 
+    def get_machine_analysis(self, machine_id: str) -> Dict[str, Any]:
+        """Get structured analysis for a specific machine"""
+        response_format = """
+{
+  "machine_id": string,
+  "machine_name": string,
+  "location": string,
+  "status": string,
+  "producer": string,
+  "health_score": number (0-100),
+  "last_maintenance": string (ISO date),
+  "next_maintenance": string (ISO date),
+  "total_cost": number,
+  "parts_count": number,
+  "alerts": [
+    {
+      "type": "part_replacement|scheduled_maintenance|health_alert",
+      "severity": "critical|high|medium|low",
+      "description": string,
+      "due_date": string,
+      "estimated_cost": number
+    }
+  ],
+  "parts_needing_attention": [
+    {
+      "part_id": number,
+      "part_name": string,
+      "last_replacement": string,
+      "next_expected_replacement": string,
+      "lifespan_months": number,
+      "risk_level": "high|medium|low"
+    }
+  ],
+  "maintenance_history": [
+    {
+      "date": string,
+      "type": string,
+      "cost": number,
+      "description": string
+    }
+  ],
+  "recommendations": [
+    {
+      "type": string,
+      "description": string,
+      "priority": "high|medium|low",
+      "estimated_cost": number
+    }
+  ]
+}
+"""
+        
+        query = f"Analyze machine {machine_id} and provide structured analysis including health status, maintenance history, parts needing attention, and recommendations."
+        
+        return self.ask_ai_structured(query, response_format)
+
     def _calculate_part_lifespans_from_data(self) -> Dict[int, float]:
         """Calculate average lifespan (in days) for each part type from historical data."""
         part_intervals = defaultdict(list)
@@ -580,7 +636,8 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
             if not (isinstance(part_id, int) and isinstance(equip_id, int)):
                 continue  # skip if IDs are not valid integers
             
-            if replace_date and replace_date != "NULL":
+            lifespan_months = self.get_smart_part_lifespan(part_id)
+            if replace_date and replace_date != "NULL" and lifespan_months:
                 try:
                     dt = dateutil.parser.parse(replace_date, fuzzy=True) # Use dateutil.parser.parse
                     # Ensure both dates are timezone-naive for comparison
@@ -588,23 +645,26 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
                         dt = dt.replace(tzinfo=None)
                     if now.tzinfo is not None:
                         now = now.replace(tzinfo=None)
-                    
-                    if dt:
-                        # Use smart lifespan lookup (online first, then default)
-                        lifespan_months = self.get_smart_part_lifespan(part_id)
-                        next_check = dt + timedelta(days=lifespan_months*30)
-                        if now >= next_check:
-                            due_checks.append({
-                                "equipment_id": equip_id,
-                                "part_id": part_id,
-                                "last_replacement": replace_date,
-                                "expected_next_check": next_check.strftime("%Y-%m-%d"),
-                                "lifespan_months": lifespan_months,
-                                "lifespan_source": "online" if self.get_online_part_lifespan(part_id) else "default"
-                            })
+                    next_check = dt + timedelta(days=lifespan_months*30)
+                    expected_next_check = next_check.strftime("%Y-%m-%d")
                 except Exception as e:
                     print(f"[DEBUG] Failed to parse date '{replace_date}' for part {part_id}: {e}")
-                    continue
+                    expected_next_check = "N/A"
+            else:
+                expected_next_check = "N/A"
+            
+            # Use smart lifespan source info
+            lifespan_source = "online" if self.get_online_part_lifespan(part_id) else "default"
+            
+            if expected_next_check != "N/A" and now >= dateutil.parser.parse(expected_next_check, fuzzy=True):
+                due_checks.append({
+                    "equipment_id": equip_id,
+                    "part_id": part_id,
+                    "last_replacement": replace_date,
+                    "expected_next_check": expected_next_check,
+                    "lifespan_months": lifespan_months,
+                    "lifespan_source": lifespan_source
+                })
         return due_checks
 
     def _search_part_lifespan_online(self, part_name: str, machine_name: str, manufacturer: str = None) -> Optional[int]:
@@ -988,6 +1048,15 @@ class StructuredAI_CLI:
                             print("❌ Please provide a valid equipment ID")
                     else:
                         print("❌ Please provide equipment ID")
+                
+                elif cmd in ['analyze']:
+                    if args:
+                        machine_id = args[0]
+                        print(f"\n🔍 Analyzing machine {machine_id}...")
+                        analysis = self.agent.get_machine_analysis(machine_id)
+                        print(json.dumps(analysis, indent=2))
+                    else:
+                        print("❌ Please provide a machine ID")
                 
                 elif cmd in ['costs', 'c']:
                     print("\n💰 Getting cost analysis...")
