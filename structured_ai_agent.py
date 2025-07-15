@@ -66,7 +66,7 @@ class StructuredSparePartsAgent:
         
         try:
             # Load all data from db.json
-            with open('json/updated_db.json', 'r') as f:
+            with open('json/real-data-db.json', 'r') as f:
                 db_data = json.load(f)
             
             # Map db.json structure to expected format
@@ -532,7 +532,28 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
             
             predicted_next = last_replacement + timedelta(days=avg_interval)
             due = now >= predicted_next
-            
+
+            # Get AI-powered lifespan in months for this part
+            lifespan_months = self.get_smart_part_lifespan(part_id)
+
+            # Gather machine data
+            machine = next((m for m in self.data['machines'] if m.get('rollingstockId') == equip_id), None)
+            machine_data = {
+                'machine_id': machine.get('id') if machine else None,
+                'machine_name': machine.get('name') if machine else None,
+                'location': machine.get('location') if machine else None,
+                'status': machine.get('status') if machine else None,
+                'producer': machine.get('producer') if machine else None
+            } if machine else {}
+
+            # Gather part data
+            part = next((p for p in self.data['spare_parts'] if p.get('SPAREPARTID') == part_id), None)
+            part_data = {
+                'part_name': part.get('NOTE') if part else None,
+                'description': part.get('DESCRIPTION') if part else None,
+                'manufacturer': part.get('MANUFACTURER') if part else None
+            } if part else {}
+
             predictions.append({
                 "equipment_id": equip_id,
                 "part_id": part_id,
@@ -540,7 +561,10 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
                 "predicted_next_replacement": predicted_next.strftime("%Y-%m-%d"),
                 "average_interval_days": avg_interval,
                 "prediction_method": prediction_method,
-                "due": due
+                "due": due,
+                "lifespan_months": lifespan_months,
+                "machine": machine_data,
+                "part": part_data
             })
         
         return predictions

@@ -62,7 +62,7 @@ class AILifespanLookup:
                     },
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,  # Lower temperature for more consistent results
+                temperature=0.0,  # Lower temperature for more consistent results
                 max_tokens=10
             )
             
