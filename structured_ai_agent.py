@@ -9,7 +9,6 @@ import dateutil.parser
 from collections import defaultdict
 import requests
 import re
-from serpapi import GoogleSearch
 from ai_lifespan_lookup import AILifespanLookup
 
 load_dotenv()
@@ -66,7 +65,7 @@ class StructuredSparePartsAgent:
         
         try:
             # Load all data from db.json
-            with open('json/real-data-db.json', 'r') as f:
+            with open('json/db2.json', 'r') as f:
                 db_data = json.load(f)
             
             # Map db.json structure to expected format
@@ -456,7 +455,8 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
       "last_replacement": string,
       "next_expected_replacement": string,
       "lifespan_months": number,
-      "risk_level": "high|medium|low"
+      "risk_level": "high|medium|low",
+      "intervention_description": string
     }
   ],
   "maintenance_history": [
@@ -478,7 +478,7 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
 }
 """
         
-        query = f"Analyze machine {machine_id} and provide structured analysis including health status, maintenance history, parts needing attention, and recommendations."
+        query = f"Analyze machine {machine_id} and provide structured analysis including health status, maintenance history, parts needing attention, and recommendations. Include comprehensive, detailed intervention descriptions for each part with full technical details, procedures, tools required, troubleshooting steps, and best practices. Provide extensive descriptions that cover all aspects of maintenance and intervention procedures."
         
         return self.ask_ai_structured(query, response_format)
 
@@ -667,106 +667,6 @@ IMPORTANT: Respond ONLY with valid JSON in the exact format specified. Do not in
                 })
         return due_checks
 
-    def _search_part_lifespan_online(self, part_name: str, machine_name: str, manufacturer: str = None) -> Optional[int]:
-        """
-        Search online for part lifespan information using SerpAPI and AI analysis
-        Returns lifespan in months, or None if not found
-        """
-        try:
-            # Get SerpAPI key from environment
-            serpapi_key = os.getenv("SERPAPI_API_KEY")
-            if not serpapi_key:
-                logger.warning("No SERPAPI_API_KEY found. Using OpenAI-only search.")
-                return self._search_part_lifespan_openai_only(part_name, machine_name, manufacturer)
-            
-            # Create search query
-            search_query = f"{part_name} lifespan maintenance replacement schedule {manufacturer or ''} {machine_name or ''}"
-            
-            logger.info(f"🔍 Searching online for: {search_query}")
-            
-            # Perform web search using SerpAPI
-            search = GoogleSearch({
-                "q": search_query,
-                "api_key": serpapi_key,
-                "num": 5  # Get top 5 results
-            })
-            
-            results = search.get_dict()
-            
-            # Extract search results
-            search_results = []
-            if "organic_results" in results:
-                for result in results["organic_results"]:
-                    search_results.append({
-                        "title": result.get("title", ""),
-                        "snippet": result.get("snippet", ""),
-                        "link": result.get("link", "")
-                    })
-            
-            if not search_results:
-                logger.warning("No search results found")
-                return self._search_part_lifespan_openai_only(part_name, machine_name, manufacturer)
-            
-            # Use OpenAI to analyze the search results
-            analysis_prompt = f"""
-You are a maintenance expert. Analyze the following search results to find the lifespan of this part:
-
-Part Name: {part_name}
-Machine/Equipment: {machine_name}
-Manufacturer: {manufacturer or 'Unknown'}
-
-SEARCH RESULTS:
-{json.dumps(search_results, indent=2)}
-
-Please analyze these search results and extract:
-1. The typical lifespan in months for this part
-2. Any specific maintenance intervals mentioned
-3. Factors that affect the lifespan
-
-If you find specific lifespan information, respond with ONLY the number of months.
-If you cannot find specific information, respond with 'UNKNOWN'.
-
-Examples of valid responses:
-- "24" (for 24 months)
-- "12" (for 12 months)
-- "UNKNOWN" (if no specific information found)
-"""
-            
-            if self.use_openai:
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a maintenance expert. Extract specific lifespan information from search results. Respond with only a number (months) or 'UNKNOWN'."},
-                        {"role": "user", "content": analysis_prompt}
-                    ],
-                    temperature=0.1,
-                    max_tokens=50
-                )
-                
-                result = response.choices[0].message.content.strip()
-                
-                # Try to extract a number from the response
-                if result.isdigit():
-                    lifespan = int(result)
-                    logger.info(f"✅ Found lifespan from web search: {lifespan} months")
-                    return lifespan
-                elif "UNKNOWN" in result.upper():
-                    logger.warning("No specific lifespan found in search results")
-                    return None
-                else:
-                    # Try to extract number from text
-                    numbers = re.findall(r'\d+', result)
-                    if numbers:
-                        lifespan = int(numbers[0])
-                        logger.info(f"✅ Extracted lifespan from text: {lifespan} months")
-                        return lifespan
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error searching for part lifespan: {e}")
-            return self._search_part_lifespan_openai_only(part_name, machine_name, manufacturer)
-    
     def _search_part_lifespan_openai_only(self, part_name: str, machine_name: str, manufacturer: str = None) -> Optional[int]:
         """
         Fallback method using only OpenAI (no web search)
